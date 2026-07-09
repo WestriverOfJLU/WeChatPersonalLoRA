@@ -1,49 +1,45 @@
-# WeChat Personal LoRA
+# WeChatPersonalLoRA
 
-Local toolkit for fine-tuning a Qwen chat model on personal chat-style data, then running it through a safer router:
+一个用于本地训练和运行“个人聊天风格 LoRA”的工具箱。项目以 Qwen 系列聊天模型为基座，支持用个人聊天风格数据训练 LoRA，并通过路由聊天脚本把“事实可靠性”和“个人语气”分开处理。
 
-- LoRA adapter: learns personal reply tone.
-- Base model: handles factual consulting, technical questions, and writing.
-- Router chat: decides when to use the base model, when to use LoRA, and when to rewrite reliable content into the personal style.
+本仓库只包含代码，不包含私人聊天记录、生成的数据集、模型 checkpoint 或 LoRA 权重。
 
-This repository intentionally does **not** include private chat logs, generated datasets, model checkpoints, or LoRA weights.
+## 为什么需要路由聊天
 
-## Why Router Chat
+风格 LoRA 很擅长“说话像某个人”，但不适合独自承担事实问答。直接让 LoRA 回答学校、导师、专业、技术概念或写作任务时，很容易出现幻觉。
 
-A style LoRA is good at sounding like a person, but bad at knowing facts. If you ask it about schools, teachers, majors, technical concepts, or writing tasks, a raw LoRA can hallucinate.
-
-The recommended flow is:
+推荐流程是：
 
 ```text
-user message
-  -> classify route
-  -> factual / consulting / writing: base Qwen first
-  -> optional guarded style rewrite with LoRA
-  -> final answer
+用户消息
+  -> 判断问题类型
+  -> 事实 / 咨询 / 写作：先由基座模型生成可靠内容
+  -> 需要个人口吻时，再由 LoRA 做受约束改写
+  -> 输出最终回答
 ```
 
-The guarded rewrite checks for risky changes such as newly invented people, schools, institutions, rankings, or overconfident claims.
+`router_chat.py` 会检查 LoRA 改写是否新增了可疑的人名、学校、机构、排名或过度确定的判断，尽量避免“为了像你而把事实改歪”。
 
-## Features
+## 功能
 
-- QLoRA training script for Qwen-style chat models.
-- Contextual SFT JSONL normalizer.
-- Pure LoRA chat loop for style testing.
-- Router chat for practical use.
-- Windows PowerShell launchers for WSL.
-- Input sanitization for PowerShell/WSL terminal edge cases.
-- Personal facts file to reduce identity and background hallucinations.
+- 使用 4-bit QLoRA 训练 Qwen 风格模型。
+- 支持上下文 SFT JSONL 数据格式。
+- 提供纯 LoRA 聊天脚本，用于测试个人语气。
+- 提供推荐的 router 聊天脚本，用于更实用的日常对话。
+- 支持 Windows PowerShell + WSL 启动。
+- 针对 PowerShell / WSL 终端输入中的退格、异常空格、非法 Unicode 做了净化。
+- 支持本地 `personal_facts.md`，减少身份和背景信息幻觉。
 
-## Repository Layout
+## 目录结构
 
 ```text
 scripts/
-  train_lora.py        Train a 4-bit QLoRA adapter
-  router_chat.py       Recommended router chat
-  chat_loop.py         Pure LoRA chat loop
-  chat_with_lora.py    Single-prompt LoRA inference
-  normalize_jsonl.py   Normalize contextual SFT JSONL
-  build_dataset.py     Build simple style-only data from CSV
+  train_lora.py        训练 4-bit QLoRA adapter
+  router_chat.py       推荐使用的路由聊天脚本
+  chat_loop.py         纯 LoRA 聊天脚本
+  chat_with_lora.py    单轮 LoRA 推理
+  normalize_jsonl.py   标准化上下文 SFT JSONL
+  build_dataset.py     从 CSV 构建简单风格数据
 
 data/
   personal_facts.example.md
@@ -55,21 +51,31 @@ run_samples.ps1
 status_train.ps1
 ```
 
-Ignored local-only paths include `data/*.jsonl`, `outputs/`, `logs/`, `.venv/`, and model weight files.
+以下内容默认被 `.gitignore` 排除：
 
-## Setup
+```text
+data/*.jsonl
+data/personal_facts.md
+outputs/
+logs/
+.venv/
+*.safetensors
+*.gguf
+```
 
-The scripts are intended for WSL with an NVIDIA GPU.
+## 环境准备
+
+建议在 WSL 中使用 NVIDIA GPU 运行。
 
 ```bash
-cd /path/to/wechat_personal_lora
+cd /path/to/WeChatPersonalLoRA
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip wheel setuptools
 python -m pip install -r requirements-wsl.txt
 ```
 
-Test CUDA:
+检查 CUDA：
 
 ```bash
 python - <<'PY'
@@ -80,17 +86,17 @@ print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "no cuda")
 PY
 ```
 
-## Data Format
+## 数据格式
 
-Recommended contextual SFT format:
+推荐使用上下文 SFT JSONL，每行一条样本：
 
 ```json
 {"messages":[{"role":"system","content":"..."},{"role":"user","content":"..."},{"role":"assistant","content":"..."}]}
 ```
 
-Put your private JSONL files under `data/`. They are ignored by Git.
+私人数据请放到 `data/` 目录下。该目录里的真实数据默认不会进入 Git。
 
-If you already have train/validation JSONL:
+如果你已经有训练集和验证集：
 
 ```bash
 python scripts/normalize_jsonl.py \
@@ -99,9 +105,9 @@ python scripts/normalize_jsonl.py \
   --out-dir data
 ```
 
-## Train
+## 训练
 
-Example for Qwen3-8B:
+以 `Qwen/Qwen3-8B` 为例：
 
 ```bash
 python scripts/train_lora.py \
@@ -119,44 +125,46 @@ python scripts/train_lora.py \
   --logging-steps 10
 ```
 
-For lower VRAM pressure, reduce `--max-seq-length` to `768`.
+如果显存压力较大，可以把 `--max-seq-length` 降到 `768`。
 
-## Run
+## 运行
 
-Copy the example facts file and edit it:
+先复制个人事实模板：
 
 ```bash
 cp data/personal_facts.example.md data/personal_facts.md
 ```
 
-Recommended router chat:
+然后按需填写 `data/personal_facts.md`。这里只应该写确定无误、可以被本地助手使用的事实。
+
+推荐使用 router 聊天：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\start_router_chat.ps1
 ```
 
-Pure LoRA style test:
+纯 LoRA 风格测试：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\start_chat.ps1
 ```
 
-Router commands:
+router 内置命令：
 
 ```text
-/smart   default router mode
-/normal  pure LoRA chat
-/fact    force factual / consulting mode
-/write   force writing mode
-/rewrite rewrite input into the personal tone
-/facts   show the personal facts file path
-/reset   clear context
-/exit    quit
+/smart   默认智能路由
+/normal  纯 LoRA 闲聊
+/fact    强制事实 / 咨询模式
+/write   强制写作模式
+/rewrite 把输入改写成个人口吻
+/facts   显示个人事实文件路径
+/reset   清空上下文
+/exit    退出
 ```
 
-## Publish Adapter Weights
+## 发布 LoRA 权重
 
-If you want to publish your trained adapter, publish it separately from this code repository. Adapter-only publishing is safer than publishing a merged full model:
+如果要发布训练好的 adapter，建议单独发布到 Hugging Face，而不是放进 GitHub 仓库。adapter-only 比合并完整模型更安全，也更适合分发。
 
 ```bash
 hf auth login
@@ -164,21 +172,21 @@ hf repo create <user>/<repo-name> --type model --private
 hf upload <user>/<repo-name> outputs/qwen3_8b_wechat_lora . --repo-type model
 ```
 
-Review the adapter model card carefully before making it public.
+公开前请认真检查 model card，确认不包含私人聊天记录、个人身份信息或不适合公开的示例。
 
-## Privacy Notes
+## 隐私提醒
 
-Do not commit:
+请不要提交：
 
-- Raw chat exports.
-- Generated SFT datasets.
-- `personal_facts.md` with private details.
-- LoRA checkpoints or merged model weights.
-- Debug files that may contain user input.
-- Tokens or credentials.
+- 原始聊天记录。
+- 生成后的 SFT 数据集。
+- 带私人信息的 `personal_facts.md`。
+- LoRA checkpoint 或合并模型权重。
+- tokenizer/debug 日志。
+- token、cookie、密钥或其他凭据。
 
-This project is for local experimentation and personal assistant research. Do not use it to impersonate a real person without consent.
+本项目用于本地实验和个人助手研究。请勿在未经同意的情况下用它冒充真实个人。
 
-## License
+## 许可证
 
-MIT. See [LICENSE](LICENSE).
+MIT，见 [LICENSE](LICENSE)。
