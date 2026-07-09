@@ -1,0 +1,46 @@
+# Python / local environments
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Private data and generated datasets
+data/*
+!data/.gitkeep
+!data/personal_facts.example.md
+*.jsonl
+*.csv
+*.tsv
+*.xlsx
+*.xls
+
+# Model weights, checkpoints, and experiment outputs
+outputs/
+logs/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.gguf
+checkpoint-*/
+runs/
+
+# Runtime/debug files
+*.log
+chat_loop_last_encode_error.txt
+chat_loop_tokenizer_error.txt
+router_chat_tokenizer_error.txt
+
+# Secrets
+.env
+*.token
+hf_token*
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
