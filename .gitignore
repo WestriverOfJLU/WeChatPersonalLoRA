@@ -20,6 +20,7 @@ data/*
 # Model weights, checkpoints, and experiment outputs
 outputs/
 logs/
+hf_publish/
 *.safetensors
 *.bin
 *.pt
